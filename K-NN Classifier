@@ -1,1 +1,238 @@
+# In[1]:
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+data = pd.read_csv('Hw1DataSet2022.csv')
+data
+
+
+# In[2]:
+
+
+data.columns
+
+
+# In[3]:
+
+
+X = np.array(data.drop(columns=['target']))
+Y = np.array(data['target'].values)
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+
+# In[4]:
+
+
+from sklearn.model_selection import train_test_split
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=1, stratify=Y)
+
+
+# In[5]:
+
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import KFold
+
+
+# # Calculate LOOCV Scores
+
+# In[6]:
+
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import LeaveOneOut
+
+LOOCVAccuracy=[]
+for j in range(1,26):
+    knn = make_pipeline(StandardScaler(),KNeighborsClassifier(n_neighbors = j))
+    scores = cross_val_score(knn, x_train, y_train, cv=LeaveOneOut(), scoring='accuracy')
+    LOOCVAccuracy.append([scores.mean(),j])
+    
+loocv_valid = pd.DataFrame(LOOCVAccuracy,columns=['Validation Accuracy','NeighbourSize'])
+loocv_valid.index=loocv_valid["NeighbourSize"]
+loocv_valid.drop("NeighbourSize",axis=1,inplace=True)
+print(loocv_valid)
+
+
+# In[7]:
+
+
+best_neighbour_size_loocv = loocv_valid[loocv_valid["Validation Accuracy"]==loocv_valid["Validation Accuracy"].max()]
+best_neighbour_size_loocv
+
+
+# In[8]:
+
+
+best_ns = best_neighbour_size_loocv.index.tolist()[0]
+
+
+# # LOOCV Score For Test Data
+
+# In[9]:
+
+
+knn_loocv = make_pipeline(StandardScaler(),KNeighborsClassifier(n_neighbors=best_ns))
+knn_loocv.fit(x_train,y_train)
+knn_loocv.score(x_test,y_test)
+
+
+# # Confusion Matrix for Train Data 
+
+# In[10]:
+
+
+knn_loocv.predict(x_train)
+y_train_pred = knn_loocv.predict(x_train)
+y_train_pred
+
+
+# In[11]:
+
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_train = confusion_matrix(y_train, y_train_pred)
+
+ax=plt.subplot()
+sns.heatmap(confusion_matrix_train, annot=True, fmt='g', ax=ax, cmap="Blues")
+
+ax.set_xlabel('Predicted labels')
+ax.set_ylabel('Actual labels')
+ax.set_title('Confusion Matrix')
+ax.xaxis.set_ticklabels(['True', 'False'])
+ax.yaxis.set_ticklabels(['True', 'False'])
+plt.show()
+
+
+# # Confusion Matrix for Test Data
+
+# In[12]:
+
+
+knn_loocv.predict(x_test)
+y_test_pred = knn_loocv.predict(x_test)
+y_test_pred
+
+
+# In[13]:
+
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_test = confusion_matrix(y_test, y_test_pred)
+
+ax=plt.subplot()
+sns.heatmap(confusion_matrix_test, annot=True, fmt='g', ax=ax, cmap="Blues")
+
+ax.set_xlabel('Predicted labels')
+ax.set_ylabel('Actual labels')
+ax.set_title('Confusion Matrix')
+ax.xaxis.set_ticklabels(['True', 'False'])
+ax.yaxis.set_ticklabels(['True', 'False'])
+plt.show()
+
+
+# # Calculating CV Scores with KFold
+
+# In[14]:
+
+
+cv = KFold(n_splits=5, random_state=1, shuffle=True)
+CVAccuracy=[]
+
+for j in range(1,26):
+    for train_index, validation_index in cv.split(x_train):
+        X_train_v, X_valid, Y_train_v, Y_valid = X[train_index], X[validation_index], Y[train_index], Y[validation_index]
+        knn = make_pipeline(StandardScaler(),KNeighborsClassifier(n_neighbors = j))
+        knn.fit(X_train_v,Y_train_v)
+        CVAccuracy.append([knn.score(X_valid, Y_valid),j])
+
+cv_valid = pd.DataFrame (CVAccuracy,columns=['Validation Accuracy','NeighbourSize'])
+cv_valid.index=cv_valid["NeighbourSize"]
+cv_valid.drop("NeighbourSize",axis=1,inplace=True)
+pd.set_option('display.max_rows', None)
+cv_valid
+
+
+# In[15]:
+
+
+cv_valid=cv_valid.reset_index().groupby('NeighbourSize').mean()
+cv_valid
+
+
+# In[16]:
+
+
+best_neighbour_size_cv = cv_valid[cv_valid["Validation Accuracy"]==cv_valid["Validation Accuracy"].max()]
+best_neighbour_size_cv
+
+
+# # CV Score for Test Data
+
+# In[17]:
+
+
+for n in best_neighbour_size_cv.index.tolist(): 
+    knn_cv = make_pipeline(StandardScaler(),KNeighborsClassifier(n_neighbors=n))
+    knn_cv.fit(x_train,y_train)
+    print(knn_cv.score(x_test,y_test))
+
+
+# # Confusion Matrix for Train Data
+
+# In[18]:
+
+
+knn_cv.predict(x_train)
+y_train_pred = knn_cv.predict(X_train_v)
+y_train_pred
+
+
+# In[19]:
+
+
+confusion_matrix_train_cv = confusion_matrix(Y_train_v, y_train_pred)
+
+ax=plt.subplot()
+sns.heatmap(confusion_matrix_train_cv, annot=True, fmt='g', ax=ax, cmap="Blues")
+
+ax.set_xlabel('Predicted labels')
+ax.set_ylabel('Actual labels')
+ax.set_title('Confusion Matrix')
+ax.xaxis.set_ticklabels(['True', 'False'])
+ax.yaxis.set_ticklabels(['True', 'False'])
+plt.show()
+
+
+# # Confusion Matrix for Test Data
+
+# In[20]:
+
+
+knn_cv.predict(x_test)
+y_test_pred = knn_cv.predict(x_test)
+y_test_pred
+
+
+# In[21]:
+
+
+confusion_matrix_test_cv = confusion_matrix(y_test, y_test_pred)
+
+ax=plt.subplot()
+sns.heatmap(confusion_matrix_test_cv, annot=True, fmt='g', ax=ax, cmap="Blues")
+
+ax.set_xlabel('Predicted labels')
+ax.set_ylabel('Actual labels')
+ax.set_title('Confusion Matrix')
+ax.xaxis.set_ticklabels(['True', 'False'])
+ax.yaxis.set_ticklabels(['True', 'False'])
+plt.show()
+
 
